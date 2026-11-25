@@ -220,6 +220,7 @@ option.ROUGH_REFLECTIONS=Stochastic Rough Reflections
 option.RT_STEPS=Reflection March Steps
 
 option.SHADOWS=Shadow Mapping
+option.CONTACT_SHADOWS=Screen-Space Contact Shadows
 option.COLORED_SHADOWS=Colored & Water Shadows
 option.shadowMapResolution=Shadow Map Resolution
 option.shadowDistance=Shadow Render Distance
@@ -237,3 +238,5 @@ option.CHROMATIC_ABERRATION=Chromatic Aberration
 option.FILM_GRAIN=Film Grain
 
 option.PHYSICS_MOD_SUPPORT=Physics Mod Pro Ocean Hooks
+
+option.SHADOW_DEBUG=Debug Shadow Map Preview

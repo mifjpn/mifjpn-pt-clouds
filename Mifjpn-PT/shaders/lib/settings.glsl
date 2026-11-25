@@ -49,6 +49,8 @@
 #define RAY_TRACED_REFLECTIONS
 //#define ROUGH_REFLECTIONS
 #define SHADOWS
+//#define SHADOW_DEBUG
+#define CONTACT_SHADOWS
 #define COLORED_SHADOWS
 #define BLOOM
 #define VIGNETTE
@@ -74,7 +76,7 @@
 #define SUN_SIZE 1.00 // [0.50 0.75 1.00 1.25 1.50 2.00 3.00]
 #define SUN_GLOW 1.00 // [0.00 0.25 0.50 0.75 1.00 1.50 2.00]
 #define SKY_BRIGHTNESS 1.00 // [0.25 0.50 0.75 1.00 1.25 1.50 2.00]
-#define SKY_SATURATION 1.00 // [0.00 0.50 0.75 0.90 1.00 1.10 1.25 1.50]
+#define SKY_SATURATION 1.10 // [0.00 0.50 0.75 0.90 1.00 1.10 1.25 1.50]
 #define SUNSET_STRENGTH 1.00 // [0.00 0.50 0.75 1.00 1.25 1.50 2.00]
 #define FOG_DENSITY 1.00 // [0.00 0.25 0.50 0.75 1.00 1.50 2.00 3.00]
 const float sunPathRotation = -35.0; // [-60.0 -45.0 -35.0 -25.0 -15.0 0.0 15.0 25.0 35.0 45.0]
@@ -91,15 +93,15 @@ const float sunPathRotation = -35.0; // [-60.0 -45.0 -35.0 -25.0 -15.0 0.0 15.0 
 #define SNOWY_AURORA_INTENSITY 1.00 // [0.25 0.50 0.75 1.00 1.50 2.00 3.00]
 
 // ---- Dual-Layer Clouds (Low Cumulus + High Cirrus/Cirrocumulus) ----
-#define CLOUD_COVERAGE 0.52 // [0.15 0.30 0.42 0.52 0.62 0.72 0.85]
+#define CLOUD_COVERAGE 0.38 // [0.15 0.30 0.38 0.45 0.52 0.62 0.72 0.85]
 #define CLOUD_DENSITY 1.00 // [0.40 0.60 0.80 1.00 1.25 1.50 2.00]
 #define CLOUD_SPEED 1.00 // [0.00 0.25 0.50 1.00 1.50 2.00 3.00]
 #define CLOUD_STEPS 20 // [8 12 16 20 24 32 48]
-#define CLOUD_ALTITUDE 256.0 // [128.0 160.0 192.0 224.0 256.0 320.0 384.0]
+#define CLOUD_ALTITUDE 320.0 // [128.0 160.0 192.0 224.0 256.0 320.0 384.0]
 #define CLOUD_THICKNESS 180.0 // [60.0 85.0 110.0 140.0 180.0 220.0]
 #define CLOUD_BRIGHTNESS 1.00 // [0.50 0.75 1.00 1.25 1.50]
 #define CLOUD_SHADOW_STRENGTH 1.00 // [0.00 0.25 0.50 0.75 1.00]
-#define CLOUD_HIGH_COVERAGE 0.55 // [0.00 0.25 0.40 0.55 0.70 0.85 1.00]
+#define CLOUD_HIGH_COVERAGE 0.62 // [0.00 0.25 0.40 0.55 0.62 0.75 0.90 1.00]
 #define CLOUD_HIGH_DENSITY 1.00 // [0.25 0.50 0.75 1.00 1.25 1.50 2.00]
 #define CLOUD_JOLT 1.00 // [0.00 0.25 0.50 0.75 1.00 1.50]
 
@@ -173,7 +175,7 @@ const float sunPathRotation = -35.0; // [-60.0 -45.0 -35.0 -25.0 -15.0 0.0 15.0 
 #define RT_STEPS 32 // [12 16 24 32 48 64 128]
 
 const int   shadowMapResolution = 2048; // [1024 2048 3072 4096 6144]
-const float shadowDistance      = 128.0; // [64.0 96.0 128.0 160.0 192.0 256.0]
+const float shadowDistance      = 192.0; // [64.0 96.0 128.0 160.0 192.0 256.0 320.0]
 #define SHADOW_FILTER_SIZE 1.00 // [0.00 0.50 0.75 1.00 1.50 2.00]
 #define SHADOW_SAMPLES 8 // [4 6 8 12 16]
 
@@ -191,6 +193,8 @@ const float eyeBrightnessHalflife    = 6.0;
 const float centerDepthHalflife      = 1.0;
 const float ambientOcclusionLevel    = 1.0;
 const float shadowIntervalSize       = 2.0;
+const float shadowDistanceRenderMul  = 1.0;
+const float entityShadowDistanceMul  = 1.0;
 const bool  generateShadowMipmap     = false;
 const bool  shadowHardwareFiltering  = false;
 
@@ -224,5 +228,25 @@ const float MAT_ENTITY   = 10.0;
 const float MAT_HAND     = 11.0;
 
 const vec3 WATER_TAG = vec3(0.02, 0.49, 0.97);
+
+// ---- Iris Option Registration (standalone #ifdef required by Iris parser) ----
+#ifdef LABPBR
+#endif
+#ifdef POM
+#endif
+#ifdef DISTANT_RAIN
+#endif
+#ifdef RAIN_PUDDLES
+#endif
+#ifdef NETHER_LAVA
+#endif
+#ifdef PHYSICS_MOD_SUPPORT
+#endif
+#ifdef END_SHADOWS
+#endif
+#ifdef END_MOTES
+#endif
+#ifdef SHADOW_DEBUG
+#endif
 
 #endif

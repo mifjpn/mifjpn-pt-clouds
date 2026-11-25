@@ -220,6 +220,7 @@ option.ROUGH_REFLECTIONS=粗面の拡散反射
 option.RT_STEPS=反射トレースのステップ数
 
 option.SHADOWS=シャドウマップ有効化
+option.CONTACT_SHADOWS=接触影・遠景スクリーンスペース影
 option.COLORED_SHADOWS=色付き透過影・水中減衰影
 option.shadowMapResolution=シャドウマップ解像度
 option.shadowDistance=影の描画距離
@@ -237,3 +238,5 @@ option.CHROMATIC_ABERRATION=色収差
 option.FILM_GRAIN=フィルムグレイン
 
 option.PHYSICS_MOD_SUPPORT=Physics Mod Pro 海洋フック対応
+
+option.SHADOW_DEBUG=シャドウマップ診断プレビュー

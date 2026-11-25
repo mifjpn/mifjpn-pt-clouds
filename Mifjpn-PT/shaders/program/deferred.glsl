@@ -81,7 +81,7 @@ vec3 evaluateBounceHit(vec2 hitUV, vec3 sunRad, vec3 viewL, vec3 skyAmb) {
     }
 
     vec3 outRad = surfCol * (irrad + emiss * (EMISSION_STRENGTH * 0.5));
-    return outRad / (1.0 + luma(outRad) * 1.65);
+    return outRad / (1.0 + luma(outRad) * 0.52);
 }
 
 /* DRAWBUFFERS:3 */

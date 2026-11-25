@@ -35,7 +35,7 @@ void main() {
 #endif
 
     vec4 localVert = gl_Vertex;
-#ifdef MIFJPN_PHYSICS_OCEAN
+#if defined MIFJPN_PHYSICS_OCEAN && !defined HAND
     if (mc_Entity.x < 9999.5) vMatID = MAT_WATER;
     if (abs(vMatID - MAT_WATER) < 0.5) {
         vec4 physics_position = physics_oceanVertex(gl_Vertex);
@@ -67,7 +67,7 @@ void main() {
         vec3  worldN    = faceN;
         float waveCrest = 0.0, subRough = 0.02, foamMask = 0.0;
 
-#ifdef MIFJPN_PHYSICS_OCEAN
+#if defined MIFJPN_PHYSICS_OCEAN && !defined HAND
         PhysicsOceanData ocean = physics_oceanFragment();
         worldN = ocean.normal;
         vec2  worldXZ   = cameraPosition.xz + vRelPos.xz;
@@ -97,7 +97,7 @@ void main() {
 
         viewN = normalize(mat3(gbufferModelView) * worldN);
         vec3 biomeTint = saturate(vColor.rgb);
-#ifdef MIFJPN_PHYSICS_OCEAN
+#if defined MIFJPN_PHYSICS_OCEAN && !defined HAND
         biomeTint = biomeWaterColor();
 #endif
         gl_FragData[0] = vec4(encodeNormal(viewN), vLightMap);

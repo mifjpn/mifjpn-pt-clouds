@@ -1,12 +1,12 @@
-// Mifjpn-PT Clouds Edition | Spherical Perlin-Worley Low Cumulus, Curl Erosion & Aerial Perspective
+// Mifjpn-PT Clouds Edition | Wide-Vista Fair-Weather Cumulus (22km Spherical Shell)
 // SPDX-License-Identifier: MIT
 #ifndef MIFJPN_PT_CLOUDS_GLSL
 #define MIFJPN_PT_CLOUDS_GLSL
 #if defined VOLUMETRIC_CLOUDS && !defined NETHER && !defined END
 
-const float CLOUD_SIGMA_EXT    = 0.072;
-const float CLOUD_MAX_DIST     = 14000.0;
-const float CLOUD_SHELL_RADIUS = 42000.0;
+const float CLOUD_SIGMA_EXT    = 0.068;
+const float CLOUD_MAX_DIST     = 22000.0;
+const float CLOUD_SHELL_RADIUS = 68000.0;
 
 vec2 cloudEntry = vec2(-100.0, 0.0);
 
@@ -14,11 +14,11 @@ float cloudBase() { return CLOUD_ALTITUDE; }
 float cloudTop()  { return CLOUD_ALTITUDE + CLOUD_THICKNESS; }
 
 vec2 cloudWind() {
-    return vec2(0.851, 0.525) * (frameTimeCounter * 2.8 * CLOUD_SPEED);
+    return vec2(0.851, 0.525) * (frameTimeCounter * 2.6 * CLOUD_SPEED);
 }
 
 float cloudCoverAmount() {
-    return mix(CLOUD_COVERAGE, 0.94, rainStrength);
+    return mix(CLOUD_COVERAGE, 0.92, rainStrength);
 }
 
 float valueNoise3D(vec3 p) {
@@ -40,7 +40,6 @@ float valueNoise3D(vec3 p) {
     return mix(z0, z1, w.z);
 }
 
-// Fast 8-tap (2x2x2) 3D inverted cellular Worley for crisp cauliflower cumulus lobes
 float worleyBillow3D(vec3 p) {
     vec3  base  = floor(p - 0.5);
     float minD2 = 4.0;
@@ -53,31 +52,30 @@ float worleyBillow3D(vec3 p) {
                     hash13(cell + vec3(19.1, 7.7, 3.3)),
                     hash13(cell + vec3(5.3, 29.9, 13.7))
                 ) - 0.5;
-                vec3 d = (cell + 0.5 + jit * 0.72) - p;
+                vec3 d = (cell + 0.5 + jit * 0.74) - p;
                 minD2  = min(minD2, dot(d, d));
             }
         }
     }
-    return 1.0 - saturate(sqrt(minD2) * 1.08);
+    return 1.0 - saturate(sqrt(minD2) * 1.06);
 }
 
-// Weather map: x = horizontal cloud coverage, y = convective tower height (humilis -> congestus)
+// Weather field creating distinct, well-spaced fair-weather cumulus islands with wide sky corridors
 vec2 cloudWeatherField(vec2 worldXZ) {
     vec2  wind    = cloudWind();
-    vec2  uvMacro = (worldXZ + wind) * (1.0 / 920.0);
-    // Slight wind-aligned cloud street anisotropy
+    vec2  uvMacro = (worldXZ + wind) * (1.0 / 1180.0);
     vec2  wAx     = vec2(0.851, 0.525);
-    vec2  streetP = vec2(dot(uvMacro, wAx) * 0.78, dot(uvMacro, vec2(-wAx.y, wAx.x)) * 1.25);
+    vec2  streetP = vec2(dot(uvMacro, wAx) * 0.82, dot(uvMacro, vec2(-wAx.y, wAx.x)) * 1.18);
 
-    float macro = noise2D(streetP) * 0.54
-                + noise2D(uvMacro * 2.15 + 7.3) * 0.30
-                + noise2D(uvMacro * 4.65 + 2.1) * 0.16;
+    float macro = noise2D(streetP) * 0.50
+                + noise2D(uvMacro * 2.35 + 7.3) * 0.33
+                + noise2D(uvMacro * 5.10 + 2.1) * 0.17;
 
     float cv    = cloudCoverAmount();
-    float cover = smoothstep(1.0 - cv - 0.08, 1.0 - cv + 0.32, macro);
+    float cover = smoothstep(1.03 - cv * 1.05, 1.24 - cv * 0.65, macro);
 
-    float cells = noise2D((worldXZ + wind * 0.75) * (1.0 / 540.0) + 19.7);
-    float tower = saturate(mix(0.28, 1.0, smoothstep(0.15, 0.85, cover) * (0.45 + 0.55 * cells) + rainStrength * 0.35));
+    float cells = noise2D((worldXZ + wind * 0.80) * (1.0 / 620.0) + 19.7);
+    float tower = saturate(mix(0.32, 0.96, smoothstep(0.10, 0.80, cover) * (0.42 + 0.58 * cells) + rainStrength * 0.35));
     return vec2(cover, tower);
 }
 
@@ -92,47 +90,42 @@ float evalCumulusDensityAtHeight(vec3 worldPos, float normH, float mipLod) {
     float cover   = weather.x;
     if (cover <= 0.002) return 0.0;
 
-    // Flat condensation base (LCL) + rounded convective dome up to tower height
     float topH     = weather.y;
-    float baseRamp = smoothstep(0.0, 0.085, normH);
-    float topRamp  = 1.0 - smoothstep(topH * 0.52, topH, normH);
-    float gradH    = baseRamp * topRamp;
-    float profile  = cover * gradH;
+    float baseRamp = smoothstep(0.0, 0.09, normH);
+    float topRamp  = 1.0 - smoothstep(topH * 0.48, topH, normH);
+    float profile  = cover * baseRamp * topRamp;
     if (profile <= 0.002) return 0.0;
 
     vec2 drift = cloudWind();
-    // Subtle wind shear tilts towering tops downwind
-    vec2 shear = vec2(0.851, 0.525) * (normH * 28.0);
+    vec2 shear = vec2(0.851, 0.525) * (normH * 22.0);
     vec3 shpP  = vec3(
-        worldPos.x + drift.x * 1.10 - shear.x,
-        worldPos.y - frameTimeCounter * 0.22 * CLOUD_SPEED,
-        worldPos.z + drift.y * 1.10 - shear.y
+        worldPos.x + drift.x * 1.08 - shear.x,
+        worldPos.y - frameTimeCounter * 0.20 * CLOUD_SPEED,
+        worldPos.z + drift.y * 1.08 - shear.y
     );
 
-    // Perlin-Worley base shape (Schneider remap preserves cauliflower domes)
-    float fbmLow  = valueNoise3D(shpP * (1.0 / 88.0)) * 0.65 + valueNoise3D(shpP * (1.0 / 38.0) + 5.7) * 0.35;
-    float worlLow = worleyBillow3D(shpP * (1.0 / 68.0)) * 0.64 + worleyBillow3D(shpP * (1.0 / 29.0) + 2.3) * 0.36;
-    float pwShape = mix(fbmLow, worlLow, 0.54);
+    float fbmLow  = valueNoise3D(shpP * (1.0 / 96.0)) * 0.64 + valueNoise3D(shpP * (1.0 / 42.0) + 5.7) * 0.36;
+    float worlLow = worleyBillow3D(shpP * (1.0 / 74.0)) * 0.64 + worleyBillow3D(shpP * (1.0 / 32.0) + 2.3) * 0.36;
+    float pwShape = mix(fbmLow, worlLow, 0.58);
 
-    float thresh    = 1.0 - profile;
-    float baseCloud = saturate((pwShape - thresh) / max(1.0 - thresh, 0.10));
+    float thresh    = 1.0 - profile * 0.92;
+    float baseCloud = saturate((pwShape - thresh) / max(1.0 - thresh, 0.12));
     if (baseCloud <= 0.001) return 0.0;
 
-    if (mipLod < 0.5 && baseCloud < 0.72) {
-        // Curl-like domain warp + altitude-dependent Worley erosion (wispy bases, crisp turrets)
+    if (mipLod < 0.5 && baseCloud < 0.75) {
         vec3 warp = vec3(
-            valueNoise3D(shpP * (1.0 / 26.0) + vec3(0.0, 4.1, 8.3)),
-            valueNoise3D(shpP * (1.0 / 26.0) + vec3(9.2, 1.7, 3.4)),
-            valueNoise3D(shpP * (1.0 / 26.0) + vec3(4.5, 8.8, 1.9))
+            valueNoise3D(shpP * (1.0 / 28.0) + vec3(0.0, 4.1, 8.3)),
+            valueNoise3D(shpP * (1.0 / 28.0) + vec3(9.2, 1.7, 3.4)),
+            valueNoise3D(shpP * (1.0 / 28.0) + vec3(4.5, 8.8, 1.9))
         ) - 0.5;
-        vec3  detP  = shpP * (1.0 / 19.0) + warp * 0.85;
-        float wDet  = worleyBillow3D(detP) * 0.62 + worleyBillow3D(detP * 2.25 + 6.1) * 0.38;
-        float erode = mix(wDet, 1.0 - wDet, saturate(normH * 1.45));
-        baseCloud   = saturate((baseCloud - erode * 0.36 * (1.0 - baseCloud * 0.75)) / 0.76);
+        vec3  detP  = shpP * (1.0 / 20.0) + warp * 0.80;
+        float wDet  = worleyBillow3D(detP) * 0.62 + worleyBillow3D(detP * 2.20 + 6.1) * 0.38;
+        float erode = mix(wDet, 1.0 - wDet, saturate(normH * 1.40));
+        baseCloud   = saturate((baseCloud - erode * 0.34 * (1.0 - baseCloud * 0.75)) / 0.76);
     }
 
-    float lwc = mix(0.65, 1.30, saturate(normH * 1.6));
-    return saturate(baseCloud * lwc * 1.85);
+    float lwc = mix(0.70, 1.25, saturate(normH * 1.5));
+    return saturate(baseCloud * lwc * 1.75);
 }
 
 float cloudDensity(vec3 worldPos, float mipLod) {
@@ -210,7 +203,6 @@ float cloudShellDensityAt(vec3 rayOrigin, vec3 worldPos, float mipLod) {
     return evalCumulusDensityAtHeight(worldPos, normH, mipLod);
 }
 
-// Concentric spherical shell ray intersection around planet curvature CLOUD_SHELL_RADIUS
 bool intersectCloudShell(vec3 rayOrigin, vec3 rayDir, out float tEnter, out float tExit) {
     float r0   = rayOrigin.y + CLOUD_SHELL_RADIUS;
     float rBot = CLOUD_SHELL_RADIUS + cloudBase();
@@ -227,17 +219,14 @@ bool intersectCloudShell(vec3 rayOrigin, vec3 rayDir, out float tEnter, out floa
     float sBot = dBot > 0.0 ? sqrt(dBot) : 0.0;
 
     if (r0 < rBot) {
-        // Camera below cloud deck: block rays dipping below curved horizon
-        if (rayDir.y < -0.035) { tEnter = 0.0; tExit = 0.0; return false; }
+        if (rayDir.y < -0.025) { tEnter = 0.0; tExit = 0.0; return false; }
         tEnter = max(-b + sBot, 0.0);
         tExit  = -b + sTop;
     } else if (r0 <= rTop) {
-        // Camera inside cloud deck
         tEnter = 0.0;
         float hitInner = (dBot > 0.0) ? (-b - sBot) : -1.0;
         tExit = (hitInner > 0.0) ? hitInner : (-b + sTop);
     } else {
-        // Camera above cloud deck looking down into top of shell
         float hitTop = -b - sTop;
         if (hitTop < 0.0) { tEnter = 0.0; tExit = 0.0; return false; }
         tEnter = hitTop;
@@ -247,8 +236,8 @@ bool intersectCloudShell(vec3 rayOrigin, vec3 rayDir, out float tEnter, out floa
 }
 
 float dualLobeCloudPhase(float cosTheta, float lobeScale) {
-    return phaseHGn(cosTheta,  0.82 * lobeScale) * 0.74
-         + phaseHGn(cosTheta, -0.30 * lobeScale) * 0.26;
+    return phaseHGn(cosTheta,  0.80 * lobeScale) * 0.72
+         + phaseHGn(cosTheta, -0.32 * lobeScale) * 0.28;
 }
 
 vec4 volumetricClouds(
@@ -265,8 +254,13 @@ vec4 volumetricClouds(
     if (!intersectCloudShell(rayOrigin, rayDir, tEnter, tExit)) {
         return vec4(0.0, 0.0, 0.0, 1.0);
     }
+    if (tEnter >= CLOUD_MAX_DIST || tEnter >= geomDist) {
+        return vec4(0.0, 0.0, 0.0, 1.0);
+    }
 
-    tExit = min(min(tExit, geomDist), min(tEnter + 2800.0, CLOUD_MAX_DIST));
+    // Allow long grazing marches near the horizon so distant cloud streets recede to 22 km
+    float maxSlabSpan = mix(9500.0, 2600.0, saturate(abs(rayDir.y) * 3.2));
+    tExit = min(min(tExit, geomDist), min(tEnter + maxSlabSpan, CLOUD_MAX_DIST));
     if (tExit <= tEnter) return vec4(0.0, 0.0, 0.0, 1.0);
 
     float yBot      = cloudBase();
@@ -276,22 +270,21 @@ vec4 volumetricClouds(
     float stepLen   = (tExit - tEnter) / float(stepCount);
     float stepGrow  = 1.0;
     if (inDeck) {
-        stepLen  = min(stepLen, 3.2);
+        stepLen  = min(stepLen, 3.5);
         stepGrow = 1.22;
     }
 
     float currT    = tEnter + stepLen * jitter;
     float cosTheta = dot(rayDir, lightDir);
     float extCoeff = CLOUD_SIGMA_EXT * CLOUD_DENSITY;
-    float stormDim = (1.0 - 0.52 * rainStrength) * CLOUD_BRIGHTNESS;
+    float stormDim = (1.0 - 0.50 * rainStrength) * CLOUD_BRIGHTNESS;
 
-    // Sunset warmth boost at cloud altitude (clouds catch less-extinguished low sun)
     float lowSun   = (1.0 - smoothstep(0.0, 0.28, abs(lightDir.y))) * step(-0.06, lightDir.y);
-    vec3  cloudSun = lightRad * mix(vec3(1.0), vec3(1.22, 0.96, 0.80), lowSun * 0.65);
+    vec3  cloudSun = lightRad * mix(vec3(1.0), vec3(1.20, 0.96, 0.82), lowSun * 0.60);
 
     float ph0 = dualLobeCloudPhase(cosTheta, 1.00);
-    float ph1 = dualLobeCloudPhase(cosTheta, 0.52);
-    float ph2 = dualLobeCloudPhase(cosTheta, 0.24);
+    float ph1 = dualLobeCloudPhase(cosTheta, 0.50);
+    float ph2 = dualLobeCloudPhase(cosTheta, 0.22);
 
     vec3  accumRad  = vec3(0.0);
     float trans     = 1.0;
@@ -301,7 +294,7 @@ vec4 volumetricClouds(
         if (i >= stepCount || currT > tExit) break;
 
         vec3  samplePos = rayOrigin + rayDir * currT;
-        float lod       = currT > 4200.0 ? 1.0 : 0.0;
+        float lod       = currT > 4800.0 ? 1.0 : 0.0;
         float dens      = cloudShellDensityAt(rayOrigin, samplePos, lod);
 
         if (dens > 0.003) {
@@ -309,21 +302,20 @@ vec4 volumetricClouds(
             float shellH = evalSphericalCloudHeight(rayOrigin, samplePos);
             float relH   = saturate((shellH - yBot) * (1.0 / CLOUD_THICKNESS));
 
-            float sunTau = (cloudShellDensityAt(rayOrigin, samplePos + lightDir * 5.0,  1.0) * 8.0
-                          + cloudShellDensityAt(rayOrigin, samplePos + lightDir * 21.0, 1.0) * 22.0
-                          + cloudShellDensityAt(rayOrigin, samplePos + lightDir * 62.0, 1.0) * 52.0) * extCoeff;
+            float sunTau = (cloudShellDensityAt(rayOrigin, samplePos + lightDir * 6.0,  1.0) * 8.0
+                          + cloudShellDensityAt(rayOrigin, samplePos + lightDir * 24.0, 1.0) * 21.0
+                          + cloudShellDensityAt(rayOrigin, samplePos + lightDir * 68.0, 1.0) * 48.0) * extCoeff;
 
-            // 3-octave multiple scattering + silver-lining powder envelope
+            // Clean alabaster multi-scattering without muddy edge darkening
             float multScat = exp(-sunTau)        * ph0
-                           + exp(-sunTau * 0.38) * ph1 * 0.54
-                           + exp(-sunTau * 0.14) * ph2 * 0.28;
+                           + exp(-sunTau * 0.36) * ph1 * 0.58
+                           + exp(-sunTau * 0.13) * ph2 * 0.34;
+            float silverRim = 1.0 + 0.30 * exp(-sunTau * 2.2) * max(cosTheta, 0.0);
 
-            float powder = mix(1.0 - 0.68 * exp(-dens * extCoeff * 22.0), 1.0, saturate(cosTheta * 0.5 + 0.5) * 0.65);
-
-            // Sky dome ambient + warm ground/horizon bounce on cloud undersides
-            vec3 skyFill    = zenithAmb * (mix(0.26, 1.05, relH) * 0.88);
-            vec3 baseBounce = (horizAmb * 0.34 + cloudSun * (max(lightDir.y, 0.0) * 0.065)) * (1.0 - relH) * exp(-dens * 1.4);
-            vec3 inScat     = (cloudSun * (multScat * powder * 0.58) + skyFill + baseBounce) * stormDim;
+            // Airy cerulean-tinted shadow base + crisp bright sunlit crown
+            vec3 baseShadow = mix(zenithAmb * 0.62 + horizAmb * 0.36, zenithAmb * 1.18, smoothstep(0.05, 0.82, relH));
+            vec3 warmUnder  = cloudSun * (max(lightDir.y, 0.0) * 0.055 * (1.0 - relH));
+            vec3 inScat     = (cloudSun * (multScat * silverRim * 0.64) + baseShadow + warmUnder) * stormDim;
 
             float stepTrans = exp(-extCoeff * dens * stepLen);
             accumRad += trans * inScat * (1.0 - stepTrans);
@@ -337,20 +329,19 @@ vec4 volumetricClouds(
 
     if (firstHitT < 0.0) return vec4(0.0, 0.0, 0.0, 1.0);
 
-    // Rayleigh/Mie aerial perspective on distant cloud banks before horizon fade
+    // Subtle aerial perspective so clouds 8-20 km away melt softly into the pale blue horizon
     float cloudAlpha = 1.0 - trans;
-    float airMix     = 1.0 - exp(-firstHitT * 0.00018);
-    float mieFwd     = phaseHGn(cosTheta, 0.72) * 0.08;
-    vec3  aerialCol  = mix(horizAmb * 0.92, zenithAmb * 0.72, saturate(rayDir.y * 2.5)) + cloudSun * mieFwd;
-    accumRad         = mix(accumRad, aerialCol * cloudAlpha, airMix * 0.78);
+    float airMix     = 1.0 - exp(-firstHitT * 0.000085);
+    vec3  aerialCol  = mix(horizAmb * 0.96, zenithAmb * 0.78, saturate(rayDir.y * 3.0))
+                     + cloudSun * (phaseHGn(cosTheta, 0.74) * 0.06);
+    accumRad         = mix(accumRad, aerialCol * cloudAlpha, airMix * 0.72);
 
-    float farFade  = 1.0 - smoothstep(9500.0, CLOUD_MAX_DIST, firstHitT);
-    float limbFade = inDeck ? 1.0 : smoothstep(-0.025, 0.045, rayDir.y);
+    float farFade  = 1.0 - smoothstep(14500.0, CLOUD_MAX_DIST, firstHitT);
+    float limbFade = inDeck ? 1.0 : smoothstep(-0.015, 0.032, rayDir.y);
     float visW     = farFade * limbFade;
     return vec4(accumRad * visW, mix(1.0, trans, visW));
 }
 
-// Fast low-cloud proxy for reflections (qualityTier == 1); PT GI stays unburdened
 vec4 cloudsFlat(vec3 rayDir, vec3 lightDir, vec3 lightRad, vec3 zenithAmb) {
     float tEnter, tExit;
     if (!intersectCloudShell(cameraPosition, rayDir, tEnter, tExit)) return vec4(0.0);
@@ -359,11 +350,11 @@ vec4 cloudsFlat(vec3 rayDir, vec3 lightDir, vec3 lightRad, vec3 zenithAmb) {
 
     vec2  hitXZ   = cameraPosition.xz + rayDir.xz * tMid;
     float cover   = cloudCoverageMap(hitXZ);
-    float opacity = smoothstep(0.05, 0.48, cover) * smoothstep(-0.01, 0.14, rayDir.y) * (1.0 - smoothstep(8000.0, CLOUD_MAX_DIST, tMid)) * 0.92;
+    float opacity = smoothstep(0.05, 0.48, cover) * smoothstep(-0.01, 0.12, rayDir.y) * (1.0 - smoothstep(12000.0, CLOUD_MAX_DIST, tMid)) * 0.90;
     float lining  = pow(max(dot(rayDir, lightDir), 0.0), 6.0);
 
-    vec3 col = zenithAmb * 0.90 + lightRad * (0.30 + 0.45 * (1.0 - cover) + 0.60 * lining);
-    col     *= (1.0 - 0.52 * rainStrength) * CLOUD_BRIGHTNESS;
+    vec3 col = zenithAmb * 0.92 + lightRad * (0.32 + 0.46 * (1.0 - cover) + 0.58 * lining);
+    col     *= (1.0 - 0.50 * rainStrength) * CLOUD_BRIGHTNESS;
     return vec4(col, opacity);
 }
 
@@ -374,7 +365,7 @@ float cloudShadow(vec3 worldPos, vec3 lightDir) {
 
     vec2  projXZ = worldPos.xz + lightDir.xz * ((planeY - worldPos.y) / lightDir.y);
     float cover  = cloudCoverageMap(projXZ);
-    return 1.0 - 0.78 * CLOUD_SHADOW_STRENGTH * smoothstep(0.06, 0.58, cover);
+    return 1.0 - 0.68 * CLOUD_SHADOW_STRENGTH * smoothstep(0.28, 0.75, cover);
 }
 
 #endif

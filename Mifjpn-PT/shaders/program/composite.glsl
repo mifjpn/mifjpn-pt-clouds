@@ -506,7 +506,7 @@ void main() {
 
 #if defined VOLUMETRIC_CLOUDS && !defined NETHER && !defined END
     if (isEyeInWater == 0 && !isHand) {
-        vec4 cloudVol = volumetricClouds(cameraPosition, worldDir, isSky ? 1.0e6 : viewDist, dither, lightDirWorld(), getLightColor() * mix(1.0, 0.35, nightAmount()), skyAmb * 1.15, skyAmb * 0.80);
+        vec4 cloudVol = volumetricClouds(cameraPosition, worldDir, isSky ? 1.0e6 : viewDist, dither, lightDirWorld(), (getLightColor() * 0.72) * mix(1.0, 0.35, nightAmount()), skyAmb * 2.05, skyAmb * 1.45);
         sceneRad      = sceneRad * cloudVol.a + cloudVol.rgb;
     }
 #endif

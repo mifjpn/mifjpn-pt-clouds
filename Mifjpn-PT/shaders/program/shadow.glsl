@@ -1,4 +1,4 @@
-// Mifjpn-PT | Shadow Map Depth & Colored Water-Column Tag Pass
+// Mifjpn-PT | Shadow Map Pass (MC 26.3 Zero-to-One Patcher Compatible)
 // SPDX-License-Identifier: MIT
 
 #include "/lib/settings.glsl"
@@ -16,7 +16,7 @@ attribute vec4 mc_midTexCoord;
 
 vec3 warpShadowPosition(vec3 clipPos) {
     float radial = length(clipPos.xy) * 0.9 + 0.1;
-    return vec3(clipPos.xy / radial, clipPos.z * 0.2);
+    return vec3(clipPos.xy / radial, clipPos.z * 0.5);
 }
 
 void main() {
@@ -25,24 +25,20 @@ void main() {
     float blockMat = mc_Entity.x - 10000.0;
     vWaterMask     = abs(blockMat - MAT_WATER) < 0.5 ? 1.0 : 0.0;
 
-    vec4 localVert = gl_Vertex;
-#ifdef MIFJPN_PHYSICS_OCEAN
-    if (mc_Entity.x < 9999.5) vWaterMask = 1.0;
-    if (vWaterMask > 0.5) {
-        vec4 physics_position = physics_oceanVertex(gl_Vertex);
-        localVert = physics_position;
+    vec4 shadowViewPos = gl_ModelViewMatrix * gl_Vertex;
+
+#ifdef WAVING_PLANTS
+    bool isLeaves = abs(blockMat - MAT_LEAVES) < 0.5;
+    bool isPlant  = abs(blockMat - MAT_PLANT)  < 0.5 && vTexCoord.y < mc_midTexCoord.y;
+    if (isLeaves || isPlant) {
+        vec4 relPos   = shadowModelViewInverse * shadowViewPos;
+        vec3 worldPos = relPos.xyz + cameraPosition;
+        relPos.xyz   += windOffset(worldPos, isLeaves ? 0.6 : 1.0);
+        shadowViewPos = shadowModelView * relPos;
     }
 #endif
 
-    vec4 relPos   = shadowModelViewInverse * (gl_ModelViewMatrix * localVert);
-    vec3 worldPos = relPos.xyz + cameraPosition;
-
-#ifdef WAVING_PLANTS
-    if (abs(blockMat - MAT_LEAVES) < 0.5) relPos.xyz += windOffset(worldPos, 0.6);
-    else if (abs(blockMat - MAT_PLANT) < 0.5 && vTexCoord.y < mc_midTexCoord.y) relPos.xyz += windOffset(worldPos, 1.0);
-#endif
-
-    vec4 shadowClip = gl_ProjectionMatrix * (shadowModelView * relPos);
+    vec4 shadowClip = gl_ProjectionMatrix * shadowViewPos;
     shadowClip.xyz  = warpShadowPosition(shadowClip.xyz);
     gl_Position     = shadowClip;
 }
@@ -51,16 +47,14 @@ void main() {
 #ifdef FSH
 uniform sampler2D texture;
 
+/* DRAWBUFFERS:0 */
 void main() {
-    vec4 texCol = texture2D(texture, vTexCoord) * vColor;
-    if (texCol.a < 0.1) discard;
+    vec4 rawTex = texture2D(texture, vTexCoord);
+    if (rawTex.a < 0.1) discard;
 
+    vec4 texCol = vec4(rawTex.rgb * vColor.rgb, rawTex.a);
     if (vWaterMask > 0.5) {
         texCol = vec4(WATER_TAG, 1.0);
-#ifdef MIFJPN_PHYSICS_OCEAN
-        PhysicsOceanData ocean = physics_oceanFragment();
-        if (ocean.foam > 0.6) texCol.rgb = vec3(0.92);
-#endif
     }
     gl_FragData[0] = texCol;
 }

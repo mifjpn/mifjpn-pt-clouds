@@ -150,6 +150,12 @@ void main() {
     #else
         visShadow = vec3(unshadowedLight(lmSky));
     #endif
+    #ifdef CONTACT_SHADOWS
+        if (!isHand && luma(visShadow) > 0.01) {
+            float cShadow = traceContactShadow(depthtex0, viewPos, L, N, shNoise);
+            visShadow *= isPlant ? mix(1.0, cShadow, 0.55) : cShadow;
+        }
+    #endif
     }
 
 #if defined VOLUMETRIC_CLOUDS && !defined NETHER && !defined END

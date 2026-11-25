@@ -1,4 +1,4 @@
-// Mifjpn-PT Clouds Edition | Celestial Dome, Dual-Type High Cirrus/Cirrocumulus & Sky Irradiance
+// Mifjpn-PT Clouds Edition | Celestial Dome & Gossamer Cirrostratus/Cirrocumulus Veil
 // SPDX-License-Identifier: MIT
 #ifndef MIFJPN_PT_SKY_GLSL
 #define MIFJPN_PT_SKY_GLSL
@@ -45,8 +45,8 @@ vec3 getLightColor() {
     return endLightColor();
 #else
     float elev    = sunDirWorld().y;
-    vec3  sunRad  = sunColorAt(elev) * (3.1 * SUN_BRIGHTNESS * (0.30 + 0.70 * smoothstep(0.0, 0.45, elev)));
-    vec3  moonRad = vec3(0.55, 0.68, 1.00) * (0.30 * MOON_BRIGHTNESS * smoothstep(-0.05, 0.12, -elev));
+    vec3  sunRad  = sunColorAt(elev) * (4.6 * SUN_BRIGHTNESS * (0.35 + 0.65 * smoothstep(0.0, 0.42, elev)));
+    vec3  moonRad = vec3(0.55, 0.68, 1.00) * (0.44 * MOON_BRIGHTNESS * smoothstep(-0.05, 0.12, -elev));
     return (sunRad + moonRad) * (1.0 - rainStrength * 0.80);
 #endif
 }
@@ -227,67 +227,65 @@ vec4 cloudCumulus(vec3 rayDir, vec3 sunRad, vec3 lightDir, vec3 ambRad, bool fas
     return vec4(litCol, dens * smoothstep(0.01, 0.20, rayDir.y) * 0.96);
 }
 
-// Fast 4-tap (2x2) 2D cellular Worley for high-altitude Cirrocumulus (mackerel sky)
 float worleyFloccus2D(vec2 p) {
     vec2  base  = floor(p - 0.5);
     float minD2 = 4.0;
     for (int dy = 0; dy <= 1; ++dy) {
         for (int dx = 0; dx <= 1; ++dx) {
             vec2 cell = base + vec2(float(dx), float(dy));
-            vec2 d    = (cell + 0.5 + (hash22(cell) - 0.5) * 0.76) - p;
+            vec2 d    = (cell + 0.5 + (hash22(cell) - 0.5) * 0.78) - p;
             minD2     = min(minD2, dot(d, d));
         }
     }
-    return 1.0 - saturate(sqrt(minD2) * 1.18);
+    return 1.0 - saturate(sqrt(minD2) * 1.15);
 }
 
+// Gossamer Cirrostratus sheet + fine dappled Cirrocumulus ripples that preserve open blue sky
 float evalHighCloudOpticalDepth(vec2 skyXZ, bool fastMode) {
     float hiCov = saturate(CLOUD_HIGH_COVERAGE);
     if (hiCov <= 0.005) return 0.0;
 
     float drift = frameTimeCounter * CLOUD_SPEED;
-    vec2  uv    = skyXZ * (1.0 / 3400.0) + vec2(0.0014, 0.00055) * drift;
+    vec2  uv    = skyXZ * (1.0 / 5200.0) + vec2(0.00085, 0.00032) * drift;
 
-    // Jet-stream curl warp for sweeping mares'-tail Cirrus filaments
     vec2 jetWarp = vec2(
-        fbm(uv * 0.75 + vec2(3.1, 7.4)),
-        fbm(uv * 0.75 + vec2(12.8, 1.9))
+        fbm(uv * 0.80 + vec2(3.1, 7.4)),
+        fbm(uv * 0.80 + vec2(12.8, 1.9))
     ) - 0.5;
 
-    vec2  jetAx   = vec2(0.906, 0.423);
-    vec2  sheared = uv + jetWarp * 0.85;
-    vec2  anisoA  = vec2(dot(sheared, jetAx) * 0.52, dot(sheared, vec2(-jetAx.y, jetAx.x)) * 3.10);
-    vec2  anisoB  = vec2(dot(sheared, vec2(0.766, -0.643)) * 0.85, dot(sheared, vec2(0.643, 0.766)) * 4.40);
+    // Regional sky clearing so broad swaths of pure cobalt sky remain open
+    float airMassWindow = smoothstep(0.96 - hiCov * 0.68, 1.32 - hiCov * 0.44, fbm(uv * 0.58 + jetWarp * 0.40 + 5.3));
+    if (airMassWindow <= 0.002) return 0.0;
 
-    float streakMain = fbm(anisoA + 11.0);
-    float streakHook = fastMode ? 0.5 : noise2D(anisoB * 1.6 + 23.0);
-    float macroFront = noise2D(uv * 0.48 + 5.3);
-    float cirrus     = smoothstep(1.02 - hiCov * 0.72, 1.28 - hiCov * 0.50, streakMain * (0.72 + 0.42 * streakHook) * (0.60 + 0.65 * macroFront));
+    // 1. Silky fibrous Cirrostratus veil (巻層雲)
+    vec2  jetAx     = vec2(0.906, 0.423);
+    vec2  sheared   = uv + jetWarp * 0.75;
+    vec2  anisoSheet = vec2(dot(sheared, jetAx) * 0.62, dot(sheared, vec2(-jetAx.y, jetAx.x)) * 2.85);
+    float csFibers  = fbm(anisoSheet * 1.35 + 11.0) * 0.68 + noise2D(anisoSheet * 3.80 + 23.0) * 0.32;
+    float csVeil    = airMassWindow * smoothstep(0.32, 0.86, csFibers) * 0.38;
 
     if (fastMode) {
-        return cirrus * 0.48 * CLOUD_HIGH_DENSITY;
+        return csVeil * CLOUD_HIGH_DENSITY;
     }
 
-    // Sublayer 2: Rippled Cirrocumulus / Altocumulus floccus beds
-    float patchEnv = smoothstep(1.06 - hiCov * 0.68, 1.24 - hiCov * 0.52, fbm(uv * 0.92 + jetWarp * 0.35 + 41.0));
-    float floccus  = 0.0;
-    if (patchEnv > 0.005) {
-        vec2  cellUV  = (uv + jetWarp * 0.22) * 16.5;
-        float pebbles = worleyFloccus2D(cellUV) * 0.65 + worleyFloccus2D(cellUV * 2.15 + 7.1) * 0.35;
-        floccus = patchEnv * smoothstep(0.34, 0.78, pebbles) * 0.72;
+    // 2. Fine-grained dappled Cirrocumulus ripples (細かなうろこ雲の斑模様)
+    float dappleZone = airMassWindow * smoothstep(0.42, 0.80, fbm(uv * 1.35 - jetWarp * 0.30 + 37.0));
+    float ccDapple   = 0.0;
+    if (dappleZone > 0.005) {
+        vec2  cellUV = (uv + jetWarp * 0.18) * 31.0;
+        float grains = worleyFloccus2D(cellUV) * 0.62 + worleyFloccus2D(cellUV * 2.15 + 7.1) * 0.38;
+        ccDapple = dappleZone * smoothstep(0.30, 0.82, grains) * 0.44;
     }
 
-    return (cirrus * 0.52 + floccus) * CLOUD_HIGH_DENSITY;
+    return (csVeil + ccDapple) * CLOUD_HIGH_DENSITY;
 }
 
-// Spherical high-altitude ice-crystal cloud deck (Cirrus + Cirrocumulus)
 vec4 cloudCirrus(vec3 rayDir, vec3 sunDir, vec3 lightDir, vec3 ambRad, bool fastMode) {
     if (rayDir.y <= -0.015 || CLOUD_HIGH_COVERAGE <= 0.005) return vec4(0.0);
 
-    // Intersect high-altitude shell (~1650 m on R = 42000 m sphere)
-    const float R_EARTH = 42000.0;
-    const float H_HIGH  = 1650.0;
-    float r0   = R_EARTH + clamp(cameraPosition.y, -64.0, 1200.0);
+    const float R_EARTH = 68000.0;
+    const float H_HIGH  = 2400.0;
+    float r0   = R_EARTH + clamp(cameraPosition.y, -64.0, 1800.0);
     float rTop = R_EARTH + H_HIGH;
     float b    = r0 * rayDir.y;
     float disc = b * b - (r0 * r0 - rTop * rTop);
@@ -298,28 +296,20 @@ vec4 cloudCirrus(vec3 rayDir, vec3 sunDir, vec3 lightDir, vec3 ambRad, bool fast
     float tau  = evalHighCloudOpticalDepth(skyP, fastMode);
     if (tau <= 0.002) return vec4(0.0);
 
-    // Self-shadowing across cirrocumulus ripples toward light source
-    float sunTau = tau * 0.5;
-    if (!fastMode) {
-        vec2 sunStep = lightDir.xz * (95.0 / max(lightDir.y, 0.12));
-        sunTau = evalHighCloudOpticalDepth(skyP + sunStep, true) * 1.35;
-    }
-
-    // High-altitude clouds catch grazing sunlight earlier at dawn and later after sunset (+0.065 rad)
     float hiSunElev = sunDir.y + 0.065;
     vec3  hiSunRad  = sunColorAt(hiSunElev) * (3.1 * SUN_BRIGHTNESS * smoothstep(-0.04, 0.14, hiSunElev));
-    vec3  hiMoonRad = vec3(0.55, 0.68, 1.00) * (0.28 * MOON_BRIGHTNESS * smoothstep(-0.02, 0.14, -sunDir.y));
+    vec3  hiMoonRad = vec3(0.58, 0.72, 1.00) * (0.32 * MOON_BRIGHTNESS * smoothstep(-0.02, 0.14, -sunDir.y));
     vec3  hiDirect  = (hiSunRad + hiMoonRad) * (1.0 - rainStrength * 0.75);
 
     float cosTheta = dot(rayDir, lightDir);
-    float icePhase = phaseHGn(cosTheta, 0.84) * 0.62 + phaseHGn(cosTheta, 0.42) * 0.38;
-    float transSun = exp(-sunTau * 1.15);
+    float icePhase = phaseHGn(cosTheta, 0.82) * 0.55 + phaseHGn(cosTheta, 0.35) * 0.45;
+    float transSun = exp(-tau * 0.65);
 
-    vec3 iceLit = ambRad * mix(0.95, 0.72, saturate(tau))
-                + hiDirect * ((0.38 + 0.65 * icePhase) * transSun * CLOUD_BRIGHTNESS);
+    // Pure luminous ice-crystal scattering that blends gently with sky blue
+    vec3 iceLit = ambRad * 1.08 + hiDirect * ((0.46 + 0.58 * icePhase) * transSun * CLOUD_BRIGHTNESS);
 
-    float opacity   = (1.0 - exp(-tau * 1.15)) * (1.0 - 0.70 * rainStrength);
-    float horizFade = smoothstep(-0.015, 0.075, rayDir.y) * exp(-tHit * 0.000045);
+    float opacity   = (1.0 - exp(-tau * 0.92)) * (1.0 - 0.70 * rainStrength);
+    float horizFade = smoothstep(-0.012, 0.055, rayDir.y) * exp(-tHit * 0.000028);
     return vec4(iceLit, saturate(opacity * horizFade));
 }
 #endif
@@ -328,7 +318,7 @@ vec3 skyZenith(float sinElev) {
 #if defined PHYSICAL_SKY && !defined NETHER && !defined END
     return atmSky(vec3(0.0, 1.0, 0.0), 6);
 #else
-    return keyBlend(sinElev, vec3(0.005, 0.009, 0.028), vec3(0.030, 0.050, 0.170), vec3(0.100, 0.170, 0.420), vec3(0.120, 0.290, 0.800), vec3(0.120, 0.320, 0.920));
+    return keyBlend(sinElev, vec3(0.005, 0.009, 0.028), vec3(0.030, 0.050, 0.170), vec3(0.100, 0.170, 0.420), vec3(0.120, 0.290, 0.800), vec3(0.100, 0.300, 0.940));
 #endif
 }
 
@@ -338,7 +328,7 @@ vec3 skyHorizon(float sinElev) {
     vec2 azVec = length(sDir.xz) > 0.01 ? normalize(sDir.xz) : vec2(1.0, 0.0);
     return atmSky(normalize(vec3(-azVec.y, 0.02, azVec.x)), 6);
 #else
-    return keyBlend(sinElev, vec3(0.014, 0.020, 0.046), vec3(0.150, 0.080, 0.150), vec3(0.900, 0.480, 0.280), vec3(0.640, 0.770, 0.980), vec3(0.670, 0.810, 1.000));
+    return keyBlend(sinElev, vec3(0.014, 0.020, 0.046), vec3(0.150, 0.080, 0.150), vec3(0.900, 0.480, 0.280), vec3(0.640, 0.770, 0.980), vec3(0.700, 0.850, 1.000));
 #endif
 }
 
@@ -356,9 +346,8 @@ vec3 getSkyQ(vec3 rayDir, bool renderDisc, int qualityTier) {
 #ifdef PHYSICAL_SKY
     int  scatSteps = (qualityTier >= 2) ? 12 : ((qualityTier == 1) ? 8 : 6);
     vec3 skyRad    = atmSky(rayDir, scatSteps);
-    vec3 zenCol    = skyRad;
-    vec3 horCol    = skyRad;
-    if (rainStrength > 1e-3 || qualityTier >= 1 || rayDir.y < 0.0) { zenCol = skyZenith(elev); horCol = skyHorizon(elev); }
+    vec3 zenCol    = skyZenith(elev);
+    vec3 horCol    = skyHorizon(elev);
 #else
     vec3 zenCol = skyZenith(elev);
     vec3 horCol = skyHorizon(elev);
@@ -377,15 +366,15 @@ vec3 getSkyQ(vec3 rayDir, bool renderDisc, int qualityTier) {
     vec3  sunTint  = sunColorAt(elev);
     float stormDim = 1.0 - rainStrength * 0.75;
 #ifdef PHYSICAL_SKY
-    const float HALO_SCALE = 0.45;
+    const float HALO_SCALE = 0.40;
 #else
     const float HALO_SCALE = 1.00;
 #endif
-    float sunAureole = pow(cosSun, 5.0) * 0.16 + pow(cosSun, 18.0) * (0.45 * (1.0 - smoothstep(0.0, 0.45, elev))) + pow(cosSun, 40.0) * 0.55 + pow(cosSun, 400.0) * 1.20;
+    float sunAureole = pow(cosSun, 5.0) * 0.14 + pow(cosSun, 18.0) * (0.42 * (1.0 - smoothstep(0.0, 0.45, elev))) + pow(cosSun, 40.0) * 0.52 + pow(cosSun, 400.0) * 1.20;
     skyRad += sunTint * (sunAureole * SUN_GLOW * stormDim * HALO_SCALE);
 
     float cosMoon = max(dot(rayDir, -sunDir), 0.0);
-    skyRad += vec3(0.50, 0.62, 1.00) * ((pow(cosMoon, 12.0) * 0.045 + pow(cosMoon, 160.0) * 0.20) * MOON_BRIGHTNESS * smoothstep(-0.05, 0.10, -elev) * (1.0 - rainStrength));
+    skyRad += vec3(0.52, 0.66, 1.00) * ((pow(cosMoon, 12.0) * 0.05 + pow(cosMoon, 160.0) * 0.22) * MOON_BRIGHTNESS * smoothstep(-0.05, 0.10, -elev) * (1.0 - rainStrength));
 
     skyRad = mix(vec3(luma(skyRad)), skyRad, SKY_SATURATION) * SKY_BRIGHTNESS;
     skyRad = mix(skyRad, vec3(luma(skyRad)) * 0.72, rainStrength * 0.85);
@@ -429,17 +418,15 @@ vec3 getSkyQ(vec3 rayDir, bool renderDisc, int qualityTier) {
 #ifdef CLOUDS
     if (qualityTier >= 1) {
         vec3 lDir     = lightDirWorld();
-        vec3 cloudSun = getLightColor() * mix(1.0, 0.22, nightFac);
-        vec3 cloudAmb = mix(zenCol, horCol, 0.45) * 0.90 + vec3(0.003, 0.004, 0.010);
+        vec3 cloudSun = getLightColor() * mix(1.0, 0.30, nightFac);
+        vec3 cloudAmb = mix(zenCol, horCol, 0.42) * SKY_BRIGHTNESS * 0.92 + vec3(0.003, 0.005, 0.012);
 
-        // High-altitude Cirrus + Cirrocumulus sits above low cumulus and softens stars/disc behind it
         skyRad += celestialAdd;
     #ifdef CLOUD_CIRRUS
         vec4 hiDeck = cloudCirrus(rayDir, sunDir, lDir, cloudAmb, qualityTier < 2);
         skyRad = mix(skyRad, hiDeck.rgb, hiDeck.a);
     #endif
 
-        // Low cumulus: in qualityTier == 2, 3D volumetric cumulus renders in composite.glsl over this sky
     #ifdef VOLUMETRIC_CLOUDS
         vec4 lowDeck = (qualityTier >= 2) ? vec4(0.0) : cloudsFlat(rayDir, lDir, cloudSun, cloudAmb);
     #else
@@ -453,7 +440,7 @@ vec3 getSkyQ(vec3 rayDir, bool renderDisc, int qualityTier) {
     skyRad += celestialAdd;
 #endif
 
-    if (rayDir.y < 0.0) skyRad = mix(skyRad, horCol * 0.50, 1.0 - smoothstep(-0.25, 0.0, rayDir.y));
+    if (rayDir.y < 0.0) skyRad = mix(skyRad, horCol * 0.55, 1.0 - smoothstep(-0.25, 0.0, rayDir.y));
     return skyRad;
 #endif
 }
@@ -467,17 +454,24 @@ vec3 skyLightFrom(vec3 rayDir, vec3 zenCol, vec3 horCol) {
     float elev     = sunDir.y;
     float nightFac = nightAmount();
 
-    vec3 dome = mix(zenCol, horCol, pow(1.0 - max(rayDir.y, 0.0), 2.4));
-    dome      = mix(vec3(luma(dome)), dome, 0.62);
-    dome     += sunColorAt(elev) * pow(max(dot(rayDir, sunDir), 0.0), 3.0) * (0.20 * (1.0 - smoothstep(0.0, 0.50, elev)));
+#ifdef PHYSICAL_SKY
+    vec3 horTamed = horCol / (1.0 + luma(horCol) * 0.85);
+    vec3 dome     = mix(zenCol, horTamed, pow(1.0 - max(rayDir.y, 0.0), 2.8));
+    float ambGain = 0.82;
+#else
+    vec3 dome     = mix(zenCol, horCol, pow(1.0 - max(rayDir.y, 0.0), 2.4));
+    float ambGain = 1.15;
+#endif
+    dome  = mix(vec3(luma(dome)), dome, 0.68);
+    dome += sunColorAt(elev) * pow(max(dot(rayDir, sunDir), 0.0), 3.0) * (0.14 * (1.0 - smoothstep(0.0, 0.50, elev)));
 
-    vec3 irrad = dome * (1.55 * AMBIENT_STRENGTH * (1.0 - rainStrength * 0.35));
-    irrad     *= mix(vec3(1.0), vec3(0.80, 0.93, 1.18), SHADOW_BLUENESS * 0.70);
+    vec3 irrad = dome * (ambGain * AMBIENT_STRENGTH * (1.0 - rainStrength * 0.35));
+    irrad     *= mix(vec3(1.0), vec3(0.76, 0.91, 1.22), SHADOW_BLUENESS * 0.78);
     irrad     += vec3(0.012, 0.018, 0.040) * (NIGHT_VISIBILITY * nightFac * AMBIENT_STRENGTH);
 
     if (rayDir.y < 0.0) {
         float directE = luma(getLightColor()) * max(lightDirWorld().y, 0.05);
-        irrad = mix(irrad, vec3(0.30, 0.34, 0.24) * (directE * 0.55 + luma(irrad) * 0.60), 1.0 - smoothstep(-0.35, 0.0, rayDir.y));
+        irrad = mix(irrad, vec3(0.28, 0.31, 0.24) * (directE * 0.28 + luma(irrad) * 0.55), 1.0 - smoothstep(-0.35, 0.0, rayDir.y));
     }
     return irrad;
 }

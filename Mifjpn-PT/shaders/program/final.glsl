@@ -18,6 +18,9 @@ void main() {
 #ifdef FSH
 uniform sampler2D colortex0;
 uniform sampler2D colortex11;
+#ifdef SHADOW_DEBUG
+uniform sampler2D shadowtex0;
+#endif
 
 vec3  sampleDisplay(vec2 uv)   { return texture2D(colortex0, uv).rgb; }
 float perceptualLuma(vec3 sdr) { return dot(sdr, vec3(0.299, 0.587, 0.114)); }
@@ -121,6 +124,15 @@ void main() {
     }
 
     colC += (ign(gl_FragCoord.xy, 0.0) - 0.5) * (1.0 / 255.0);
+    #ifdef SHADOW_DEBUG
+    if (texcoord.x < 0.28 && texcoord.y > 0.72) {
+        vec2 dbgUV = vec2(texcoord.x / 0.28, (texcoord.y - 0.72) / 0.28);
+        float shD  = texture2D(shadowtex0, dbgUV).r;
+        vec3  vis  = shD < 0.9999 ? vec3(fract(shD * 16.0), shD, 1.0 - shD) : vec3(0.12, 0.02, 0.02);
+        gl_FragData[0] = vec4(vis, 1.0);
+        return;
+    }
+#endif
     gl_FragData[0] = vec4(saturate(colC), 1.0);
 }
 #endif

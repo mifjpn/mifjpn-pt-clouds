@@ -1,4 +1,4 @@
-// Mifjpn-PT | Spherical Rayleigh/Mie/Ozone Sky Scattering & Biome Haze Model
+// Mifjpn-PT Clouds Edition | Crisp Cerulean-Cobalt Spherical Atmosphere & Biome Haze
 // SPDX-License-Identifier: MIT
 #ifndef MIFJPN_PT_ATMOSPHERE_GLSL
 #define MIFJPN_PT_ATMOSPHERE_GLSL
@@ -6,17 +6,18 @@
 
 const float PLANET_RADIUS_KM = 6360.0;
 const float ATMOS_TOP_KM     = 6420.0;
-const float SCALE_HEIGHT_R   = 8.0;
-const float SCALE_HEIGHT_M   = 1.2;
+const float SCALE_HEIGHT_R   = 8.2;
+const float SCALE_HEIGHT_M   = 1.15;
 
-const vec3  BETA_RAYLEIGH    = vec3(5.802e-3, 13.558e-3, 33.100e-3);
-const float BETA_MIE_SCAT    = 3.996e-3;
-const float BETA_MIE_EXT     = 4.440e-3;
-const vec3  BETA_OZONE       = vec3(0.650e-3, 1.881e-3, 0.085e-3);
-const float MIE_ANISOTROPY   = 0.76;
+// Crisp Rayleigh + low clear-air Mie turbidity + enriched Chappuis ozone for vivid sky blue
+const vec3  BETA_RAYLEIGH    = vec3(5.600e-3, 13.420e-3, 34.400e-3);
+const float BETA_MIE_SCAT    = 2.250e-3;
+const float BETA_MIE_EXT     = 2.500e-3;
+const vec3  BETA_OZONE       = vec3(0.920e-3, 2.420e-3, 0.105e-3);
+const float MIE_ANISOTROPY   = 0.78;
 
-const float SOLAR_IRRADIANCE = 36.0;
-const float LUNAR_IRRADIANCE = 1.15;
+const float SOLAR_IRRADIANCE = 37.0;
+const float LUNAR_IRRADIANCE = 1.20;
 
 const int MIFJPN_CAT_TAIGA         = 1;
 const int MIFJPN_CAT_EXTREME_HILLS = 2;
@@ -27,11 +28,11 @@ const int MIFJPN_CAT_ICY           = 7;
 const int MIFJPN_CAT_BEACH         = 9;
 const int MIFJPN_CAT_FOREST        = 10;
 const int MIFJPN_CAT_OCEAN         = 11;
-const int MIFJPN_CAT_DESERT        = 12;
 const int MIFJPN_CAT_RIVER         = 13;
 const int MIFJPN_CAT_SWAMP         = 14;
 const int MIFJPN_CAT_MUSHROOM      = 15;
 const int MIFJPN_CAT_MOUNTAIN      = 17;
+const int MIFJPN_CAT_DESERT        = 12;
 
 float atmChapman(float rScaled, float hScaled, float cosZenith) {
     float rootR = sqrt(rScaled + hScaled);
@@ -100,8 +101,11 @@ vec3 atmScatter(vec3 viewDir, vec3 lightDir, float eyeKm, int stepCount) {
         tauView += dTau;
     }
 
-    vec3  primaryScat = integR * (BETA_RAYLEIGH * atmPhaseR(cosAng)) + integM * (BETA_MIE_SCAT * atmPhaseM(cosAng));
-    float multiGain   = mix(0.09, 0.008, smoothstep(-0.10, 0.20, lightDir.y));
+    // Gentle horizon airglow lift for clean pale-cyan sea horizon
+    float horizLift   = exp(-max(viewDir.y, 0.0) * 14.0) * smoothstep(-0.08, 0.25, lightDir.y);
+    vec3  primaryScat = integR * (BETA_RAYLEIGH * atmPhaseR(cosAng))
+                      + integM * (BETA_MIE_SCAT * (atmPhaseM(cosAng) + 0.028 * horizLift));
+    float multiGain   = mix(0.095, 0.014, smoothstep(-0.10, 0.22, lightDir.y));
     return primaryScat + (integR * BETA_RAYLEIGH + integM * BETA_MIE_SCAT) * multiGain;
 }
 
@@ -112,8 +116,8 @@ vec3 atmSky(vec3 rawDir, int stepCount) {
     vec3  radiance = vec3(0.0);
 
     if (sunDir.y > -0.30) radiance += atmScatter(safeDir, sunDir, eyeKm, stepCount) * SOLAR_IRRADIANCE;
-    if (sunDir.y <  0.12) radiance += atmScatter(safeDir, -sunDir, eyeKm, stepCount) * (vec3(0.80, 0.90, 1.10) * LUNAR_IRRADIANCE * MOON_BRIGHTNESS);
-    radiance += vec3(0.0016, 0.0022, 0.0040) * (1.0 - smoothstep(-0.10, 0.05, sunDir.y));
+    if (sunDir.y <  0.12) radiance += atmScatter(safeDir, -sunDir, eyeKm, stepCount) * (vec3(0.80, 0.90, 1.12) * LUNAR_IRRADIANCE * MOON_BRIGHTNESS);
+    radiance += vec3(0.0016, 0.0024, 0.0044) * (1.0 - smoothstep(-0.10, 0.05, sunDir.y));
     return radiance;
 }
 
@@ -125,31 +129,31 @@ vec3 atmSunTint(float sinElev) {
 void biomeAtmosphereTarget(out vec3 hazeTint, out float hazeDens, out float lowMist, out float heatDistort, out float oceanSpray) {
     int  cat    = biome_category;
     bool isSnow = (biome_precipitation == 2);
-    hazeTint = vec3(1.0); hazeDens = 1.0; lowMist = 0.30; heatDistort = 0.0; oceanSpray = 0.0;
+    hazeTint = vec3(1.0); hazeDens = 0.85; lowMist = 0.22; heatDistort = 0.0; oceanSpray = 0.0;
 
-    if      (cat == MIFJPN_CAT_SWAMP)  { hazeTint = vec3(0.70, 0.74, 0.50); hazeDens = 2.80; lowMist = 1.00; }
-    else if (cat == MIFJPN_CAT_DESERT) { hazeTint = vec3(1.16, 0.94, 0.70); hazeDens = 1.70; lowMist = 0.00; heatDistort = 1.00; }
-    else if (cat == MIFJPN_CAT_MESA)   { hazeTint = vec3(1.18, 0.86, 0.64); hazeDens = 1.60; lowMist = 0.00; heatDistort = 0.85; }
-    else if (cat == MIFJPN_CAT_JUNGLE) { hazeTint = vec3(0.92, 1.02, 0.90); hazeDens = 2.00; lowMist = 0.85; }
+    if      (cat == MIFJPN_CAT_SWAMP)  { hazeTint = vec3(0.70, 0.74, 0.50); hazeDens = 2.60; lowMist = 0.95; }
+    else if (cat == MIFJPN_CAT_DESERT) { hazeTint = vec3(1.16, 0.94, 0.70); hazeDens = 1.60; lowMist = 0.00; heatDistort = 1.00; }
+    else if (cat == MIFJPN_CAT_MESA)   { hazeTint = vec3(1.18, 0.86, 0.64); hazeDens = 1.50; lowMist = 0.00; heatDistort = 0.85; }
+    else if (cat == MIFJPN_CAT_JUNGLE) { hazeTint = vec3(0.92, 1.02, 0.90); hazeDens = 1.85; lowMist = 0.80; }
     else if (cat == MIFJPN_CAT_OCEAN || cat == MIFJPN_CAT_RIVER || cat == MIFJPN_CAT_BEACH) {
-        hazeTint = vec3(0.90, 0.97, 1.06); hazeDens = 1.35; lowMist = 0.15;
-        oceanSpray = (cat == MIFJPN_CAT_RIVER) ? 0.40 : 1.00;
+        hazeTint = vec3(0.92, 0.98, 1.06); hazeDens = 1.05; lowMist = 0.12;
+        oceanSpray = (cat == MIFJPN_CAT_RIVER) ? 0.35 : 0.80;
     } else if (cat == MIFJPN_CAT_EXTREME_HILLS || cat == MIFJPN_CAT_MOUNTAIN) {
-        hazeTint = vec3(0.94, 0.98, 1.06); hazeDens = 0.45; lowMist = 0.10;
+        hazeTint = vec3(0.94, 0.98, 1.06); hazeDens = 0.42; lowMist = 0.08;
     } else if (cat == MIFJPN_CAT_MUSHROOM) {
-        hazeTint = vec3(1.02, 0.92, 1.06); hazeDens = 1.20; lowMist = 0.45;
+        hazeTint = vec3(1.02, 0.92, 1.06); hazeDens = 1.10; lowMist = 0.40;
     } else if (cat == MIFJPN_CAT_PLAINS && biome_precipitation == 0 && temperature > 1.4) {
         hazeTint    = mix(vec3(1.12, 0.98, 0.74), vec3(0.97, 0.99, 1.02), rainStrength);
-        hazeDens    = mix(1.30, 1.00, rainStrength);
-        lowMist     = mix(0.05, 0.45, rainStrength);
+        hazeDens    = mix(1.15, 1.00, rainStrength);
+        lowMist     = mix(0.05, 0.40, rainStrength);
         heatDistort = 0.40 * (1.0 - rainStrength);
     } else if (cat == MIFJPN_CAT_FOREST || cat == MIFJPN_CAT_PLAINS || cat == MIFJPN_CAT_TAIGA) {
-        lowMist = 0.55;
+        lowMist = 0.38;
     }
 
     if (isSnow) {
         bool highPeak = (cat == MIFJPN_CAT_MOUNTAIN || cat == MIFJPN_CAT_EXTREME_HILLS);
-        hazeTint = vec3(0.80, 0.90, 1.14); hazeDens = highPeak ? 0.55 : 0.95; lowMist = 0.25; heatDistort = 0.0;
+        hazeTint = vec3(0.80, 0.90, 1.14); hazeDens = highPeak ? 0.50 : 0.88; lowMist = 0.22; heatDistort = 0.0;
     }
 
     hazeDens *= mix(0.45, 1.0, exp(-max(cameraPosition.y - 90.0, 0.0) * (1.0 / 160.0)));
