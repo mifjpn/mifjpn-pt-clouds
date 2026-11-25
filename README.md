@@ -116,6 +116,7 @@ Distributed under the **MIT License**. See [`LICENSE`](LICENSE) for full text.
 | **低層雲のスケール** | `CLOUD_SCALE` | `1.00` | `0.60 – 2.00` | 綿雲1粒あたりのサイズ倍率 |
 | **高層雲 (巻雲・うろこ雲)** | `CLOUD_CIRRUS` | `ON` | `ON / OFF` | 上空の巻層雲・うろこ雲層の有効化 |
 | **高層雲の広がり** | `CLOUD_HIGH_COVERAGE` | `0.58` | `0.00 – 1.00` | 高層雲ベールの被覆面積 |
+
 | **高層雲の濃さ** | `CLOUD_HIGH_DENSITY` | `1.00` | `0.25 – 2.00` | 高層雲の光学濃度（透け感） |
 
 ## ライセンス
